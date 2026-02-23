@@ -1,0 +1,40 @@
+# Ignore everything by default
+*
+
+# Re-allow directories
+!*/
+
+# ---- Explicit ignores (MUST COME AFTER !*/) ----
+.OceanPulse_env/
+.vs/
+.dvc/
+.git/
+.idea/
+.github/
+.vscode/
+.pytest_cache/
+__pycache__/
+output/
+Data/
+
+# Ignoring the profiler results
+profiler/profiler_results/
+
+
+# ---- Allowed file types ----
+!*.ipynb
+!*.py
+!*[Rr]equirements.txt
+!*[Rr]eadme.md
+!*.md
+!*.dvc
+!*.sh
+!*.yaml
+!*.yml
+!*Dockerfile
+!*.gitignore
+!*.dockerignore
+!*.ini
+!*.html
+!*.css
+!*.js
