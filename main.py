@@ -3,6 +3,8 @@ import logging
 
 from pathlib import Path
 
+# custom imports
+from src.runners import physics_based_runner
 from src.datasets.dataset_hf import hf_vars_main
 from src.datasets.dataset_cfd import cfd_data_extractors
 # ----------------------------------------------------------------
@@ -88,19 +90,19 @@ if __name__ == "__main__":
     """
     # Define paths to CFD databases (these should be updated to actual paths)
     # Update logging to include a file handler in the new output directory
-    ROOT = Path(__file__).resolve().parent 
-    OUTPUT_DIR = Path(os.path.join(ROOT, "outputs"))
+    ROOT_DIR = Path(__file__).resolve().parent 
+    OUTPUT_DIR = Path(os.path.join(ROOT_DIR, "outputs"))
     
-    high_freq_dir = Path(os.path.join(ROOT, "data", "high_frequency"))
+    high_freq_dir = Path(os.path.join(ROOT_DIR, "data", "high_frequency"))
     
     cfd_data_dict = {
-        "aero": os.path.join(ROOT, "CFD", "AERO", "Cx.csv"),
-        "hydro_db": os.path.join(ROOT, "CFD", "HYDRO", "HYDRO_DB.csv"),
-        "r_hydro": os.path.join(ROOT, "CFD", "HYDRO", "CFD_PcwPower.csv"),
-        "propeller": os.path.join(ROOT, "CFD", "HYDRO", "PROPELLER.csv"),
-        "wave": os.path.join(ROOT, "CFD", "HYDRO", "SPAWAVE_COEFFS.csv"),
+        "aero":     os.path.join(ROOT_DIR, "data", "CFD", "AERO", "Cx.csv"),
+        "hydro_db": os.path.join(ROOT_DIR, "data", "CFD", "HYDRO", "HYDRO_DB.csv"),
+        "r_hydro":  os.path.join(ROOT_DIR, "data", "CFD", "HYDRO", "CFD_PcwPower.csv"),
+        "propeller":os.path.join(ROOT_DIR, "data", "CFD", "HYDRO", "PROPELLER.csv"),
+        "wave":     os.path.join(ROOT_DIR, "data", "CFD", "HYDRO", "SPAWAVE_COEFFS.csv"),
     }
-    log_file = ROOT / "run.log"
+    log_file = ROOT_DIR / "run.log"
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logging.getLogger().addHandler(file_handler)
@@ -110,7 +112,7 @@ if __name__ == "__main__":
     logger.info(f"Output Directory: {OUTPUT_DIR}")
     logger.info("=" * 60)
     
-    base_dir      = Path(__file__).resolve().parent
+
     models_dir    = os.path.join("models")
     
     outputs_root  = Path(os.path.join(OUTPUT_DIR , 'preprocessed'))
@@ -121,3 +123,19 @@ if __name__ == "__main__":
         variables_extraction(high_freq_dir, cfd_data_dict, outputs_root)
     except Exception as e:
         logger.error("Error during variables extraction:", exc_info=True)
+    
+    logger.info("=" * 60)
+    # ==============================================================================
+    #                                Physics based model 
+    # ==============================================================================
+    # Running physics-based model on all the ships.
+    pbm_plots = Path(os.path.join(plots_folder, "physics_based_model"))
+    try:
+        logger.info("Running physics-based runner...")
+        stats = physics_based_runner(high_frequency_dir=outputs_root,                
+                                    root_dir=ROOT_DIR,                                  
+                                    plots_folder=pbm_plots,                    
+                                    recursive=True  # Default - searches subdirectories
+                                    )
+    except Exception as e:
+        logger.error("Error during physics_based_runner:", exc_info=True)
