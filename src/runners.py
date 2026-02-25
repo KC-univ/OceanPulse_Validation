@@ -6,7 +6,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
-
+# custom imports:
+from src.pbm_model_main import pbm_main
 # ----------------------------------------------------------------
 # Logging Configuration
 # ----------------------------------------------------------------
@@ -343,7 +344,7 @@ def physics_based_runner(high_frequency_dir: Path,
             logger.info(f"Running PBM for {filename}...")
             
             # Call pbm_main with the correct parameters
-            # pbm_main(ROOT_DIR=root_dir, filename=filename, OUTPUT_DIR=plots_folder)
+            pbm_main(ROOT_DIR=root_dir, filename=filename, OUTPUT_DIR=plots_folder)
             
             stats['processed'] += 1
             logger.info(f"Successfully processed: {filename}")
