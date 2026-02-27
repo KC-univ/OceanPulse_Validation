@@ -1,0 +1,4 @@
+wind_resistance:
+  columns:
+    wind_angle: "REL_WIND_DIR_10M"
+    wind_speed: "REL_WIND_SPEED_10M"
