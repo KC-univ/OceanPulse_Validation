@@ -828,10 +828,10 @@ def hf_vars_extractor(high_frequency_folder: str,
             except Exception:
                 logger.exception("Cruising-state detection failed")
                 df_impute["is_cruising"] = False
-
+                
             # Track imputation provenance (critical for PhD defense)
             df_impute["_was_imputed"] = False
-
+            
             # ------------------------------------------------------------
             # Step 1: short-gap fill (<= 3 × 10 min = 30 min)
             # ONLY on cruising + safe variables
@@ -841,22 +841,22 @@ def hf_vars_extractor(high_frequency_folder: str,
                 max_short_gap = 3
                 safe_cols = [c for c in INTERP_SAFE if c in df_impute.columns]
                 mask = df_impute["is_cruising"]
-
+                
                 before_na = df_impute.loc[mask, safe_cols].isna()
-
+                
                 df_impute.loc[mask, safe_cols] = (
                     df_impute.loc[mask, safe_cols]
                     .ffill(limit=max_short_gap)
                     .bfill(limit=max_short_gap)
                 )
-
+                
                 after_na = df_impute.loc[mask, safe_cols].isna()
                 df_impute.loc[mask, "_was_imputed"] |= (before_na & ~after_na).any(axis=1)
-
+                
                 logger.info(f"Short-gap fill applied (±{max_short_gap} steps, cruising-only)")
             except Exception:
                 logger.exception("Short-gap fill failed")
-
+                
             # ------------------------------------------------------------
             # Step 2: time-aware interpolation (<= 6 × 10 min = 60 min)
             # cruising-only, physics-safe variables only
@@ -877,7 +877,7 @@ def hf_vars_extractor(high_frequency_folder: str,
                             limit_direction="both"
                         )
                     )
-
+                    
                     after_na = df_impute.loc[mask, safe_cols].isna()
                     df_impute.loc[mask, "_was_imputed"] |= (before_na & ~after_na).any(axis=1)
                     
@@ -887,27 +887,27 @@ def hf_vars_extractor(high_frequency_folder: str,
                     )
             except Exception:
                 logger.exception("Time interpolation failed")
-
+                
             # ------------------------------------------------------------
             # Step 3: physics-based imputation (model-consistent)
             # ------------------------------------------------------------
             try:
                 df_impute_before = df_impute.copy()
                 df_impute = data_imputation(df_impute)
-
+                
                 # Mark newly imputed rows
                 newly_filled = (
                     df_impute_before.isna() &
                     ~df_impute.isna()
                 ).any(axis=1)
                 df_impute["_was_imputed"] |= newly_filled
-
+                
                 logger.info("Physics-based imputation applied")
             except Exception:
                 logger.exception(
                     "data_imputation failed — proceeding with earlier stages only"
                 )
-
+                
             # ------------------------------------------------------------
             # Restore static vessel geometry (safety net)
             # ------------------------------------------------------------
@@ -919,7 +919,7 @@ def hf_vars_extractor(high_frequency_folder: str,
             ):
                 if static_col in df.columns and static_col not in df_impute.columns:
                     df_impute[static_col] = df[static_col]
-
+                    
             # ------------------------------------------------------------
             # Column selection (OceanPulse scope)
             # ------------------------------------------------------------
@@ -927,9 +927,9 @@ def hf_vars_extractor(high_frequency_folder: str,
                 c for c in ocean_pulse_signals
                 if c in df_impute.columns
             ] + ["_was_imputed"]
-
+            
             df_impute = df_impute[cols_to_keep]
-
+            
             # ------------------------------------------------------------
             # Handle remaining NaNs explicitly (no silent corruption)
             # ------------------------------------------------------------
@@ -940,13 +940,12 @@ def hf_vars_extractor(high_frequency_folder: str,
                     f"dropping rows with incomplete core signals"
                 )
                 df_impute = df_impute.dropna()
-
-            logger.info(
-                f"Imputation complete — retained {len(df_impute):,} rows | "
-                f"Imputed rows: {df_impute['_was_imputed'].sum():,} "
-                f"({df_impute['_was_imputed'].mean() * 100:.1f}%)"
-            )
-
+                
+            logger.info(f"Imputation complete — retained {len(df_impute):,} rows | "
+                        f"Imputed rows: {df_impute['_was_imputed'].sum():,} "
+                        f"({df_impute['_was_imputed'].mean() * 100:.1f}%)"
+                    )
+            
             # ------------------------------------------------------------
             # Continue with your existing filtering & plotting logic
             # ------------------------------------------------------------
@@ -996,7 +995,7 @@ def hf_vars_extractor(high_frequency_folder: str,
                 )
             else:
                 logger.info("  CFD filter: skipped (no conditions provided)")
-
+                
             # Final dropna
             df_final   = df_after_cfd.dropna()
             n_dropped  = len(df_after_cfd) - len(df_final)
@@ -1007,20 +1006,19 @@ def hf_vars_extractor(high_frequency_folder: str,
                         f"Total dropped: {total_drop:,} ({total_drop / original_count * 100:.1f}%) | "
                         f"Retention: {len(df_final) / original_count * 100:.1f}%"
                     )
-
+            
             logger.info("Start plotting the data loss analysis")
-            plot_data_loss_analysis(
-                df_original    = df_original,       # raw original for the plot baseline
-                df_after_speed = df_after_speed,
-                df_after_power = df_after_power,
-                df_after_cfd   = df_after_cfd,
-                df_final       = df_final,
-                speed_threshold = speed_filter_threshold,
-                power_threshold = power_filter_threshold if SignalNames.SHAFT_POWER in df.columns else None,
-                cfd_conditions  = cfd_conditions,
-                save_path       = analysis_save_path,
-                imo             = str(imo),
-            )
+            plot_data_loss_analysis(df_original    = df_original,       # raw original for the plot baseline
+                                    df_after_speed = df_after_speed,
+                                    df_after_power = df_after_power,
+                                    df_after_cfd   = df_after_cfd,
+                                    df_final       = df_final,
+                                    speed_threshold = speed_filter_threshold,
+                                    power_threshold = power_filter_threshold if SignalNames.SHAFT_POWER in df.columns else None,
+                                    cfd_conditions  = cfd_conditions,
+                                    save_path       = analysis_save_path,
+                                    imo             = str(imo),
+                                )
             
             df_impute = df_final
         # ==================================================================
@@ -1218,8 +1216,9 @@ def hf_vars_main(data_root: Path,
             logger.warning(f"Fleet directory not found: {fleet_dir} - skipping")
             continue
         
-        fleet_analysis_path    = analysis_save_path / fleet_name
+        fleet_analysis_path     = analysis_save_path / fleet_name
         fleet_preprocessed_path = outputs_root / fleet_name
+        
         fleet_analysis_path.mkdir(parents=True, exist_ok=True)
         fleet_preprocessed_path.mkdir(parents=True, exist_ok=True)
         

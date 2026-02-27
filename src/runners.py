@@ -246,6 +246,7 @@ def _ensure_physical_constraints(df: pd.DataFrame, columns: list, filename: str)
 def physics_based_runner(high_frequency_dir: Path,
                         root_dir: Path,
                         plots_folder: Path,
+                        output_dir: Optional[Path] = None,
                         required_cols: Optional[RequiredColumns] = None,
                         skip_on_error: bool = False,
                         validate_data: bool = True,
@@ -256,8 +257,10 @@ def physics_based_runner(high_frequency_dir: Path,
     
     Args:
         high_frequency_dir: Directory containing feather files (preprocessed folder)
-        base_dir: Project root directory
+        root_dir: Project root directory
         plots_folder: Directory where plots will be saved
+        output_dir: Root output directory (e.g. outputs/).  Used by PathConfig to build
+                    plots/ and metrics/ sub-dirs.  Defaults to root_dir/outputs if None.
         required_cols: Column configuration (uses defaults if None)
         skip_on_error: Continue processing if a file fails
         validate_data: Perform data validation checks
@@ -343,8 +346,11 @@ def physics_based_runner(high_frequency_dir: Path,
             
             logger.info(f"Running PBM for {filename}...")
             
-            # Call pbm_main with the correct parameters
-            pbm_main(ROOT_DIR=root_dir, filename=filename, OUTPUT_DIR=plots_folder)
+            # Resolve output root: prefer explicit output_dir, fall back to root_dir/outputs
+            _output_dir = output_dir if output_dir is not None else (root_dir / "outputs")
+
+            # Call pbm_main with the full file path and resolved output root
+            pbm_main(ROOT_DIR=root_dir, high_freq_file=file_path, OUTPUT_DIR=_output_dir)
             
             stats['processed'] += 1
             logger.info(f"Successfully processed: {filename}")

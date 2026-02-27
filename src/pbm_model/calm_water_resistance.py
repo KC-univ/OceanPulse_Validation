@@ -18,6 +18,7 @@ Date: December 2025
 """
 
 import os 
+import yaml
 import logging 
 import numpy as np 
 import pandas as pd 
@@ -148,9 +149,218 @@ def load_cfd_hydro_data(hydro_db_path: Path,
     except Exception as e:
         logger.error(f"Error loading CFD data: {e}")
         raise e
-
-# ============================================================
-#                     ENTRY POINT
-# ============================================================
-def cw_resistance_main():
-    pass
+    
+# ------------------------------------------------------------
+#           Calm water resistance function
+# ------------------------------------------------------------
+def calculate_calm_water_resistance(high_frequency_url: Path,
+                                    speed_col: str,
+                                    draft_col: str,
+                                    pcw_interpolator: RBFInterpolator,
+                                    fallback_interpolator: Optional[RBFInterpolator] = None,
+                                    epsilon: float = 1.0
+                                ) ->  pd.DataFrame:
+    """
+    Calculate calm water resistance power for high-frequency sensor data.
+    Interpolates resistance values for each speed-draft combination in the dataset
+    and adds a 'CALM_WATER_RESISTANCE' column with the results in Watts.
+    
+    If the primary interpolator produces negative values (physically impossible),
+    the fallback interpolator is used for those specific points. If no fallback
+    is provided, negative values are clipped to zero.
+    
+    Args:
+        high_frequency_url: Path to feather file with sensor data
+        speed_col: Name of column containing ship speed (m/s)
+        draft_col: Name of column containing ship draft (m)
+        pcw_interpolator: Primary RBF interpolator for resistance prediction
+        fallback_interpolator: Optional fallback interpolator for points where
+                                primary produces negative values
+        epsilon: Epsilon value used in interpolator (for column naming)
+        
+    Raises:
+        FileNotFoundError: If data file doesn't exist
+        KeyError: If required columns are missing
+        ValueError: If data contains invalid values (negative speed/draft, NaN)
+    """
+    resistance_col = 'CALM_WATER_RESISTANCE'
+    
+    if not high_frequency_url.exists():
+        raise FileNotFoundError(f"Data file not found: {high_frequency_url}")
+    
+    logger.info(f"Loading data from {high_frequency_url}")
+    
+    # Load data
+    df = pd.read_feather(high_frequency_url)
+    logger.info(f"Data loaded: {len(df)} records")
+    
+    # Validate required columns
+    required_cols = [speed_col, draft_col]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise KeyError(f"Missing required columns: {missing_cols}")
+    
+    # Check for NaN values
+    for col in required_cols:
+        if df[col].isnull().any():
+            null_count = df[col].isnull().sum()
+            raise ValueError(f"Column '{col}' contains {null_count} NaN values")
+        
+    # Validate and clean data
+    if (df[speed_col] < 0).any():
+        neg_count = (df[speed_col] < 0).sum()
+        logger.warning(f"Found {neg_count} negative speed values, taking absolute value")
+        df[speed_col] = df[speed_col].abs()
+        
+    if (df[draft_col] < 0).any():
+        neg_count = (df[draft_col] < 0).sum()
+        logger.warning(f"Found {neg_count} negative draft values, taking absolute value")
+        df[draft_col] = df[draft_col].abs()
+    
+    # Prepare input for interpolation
+    logger.info("Interpolating calm water resistance for all data points")
+    interpolation_input = df[[speed_col, draft_col]].to_numpy()
+    
+    # ------------------------------------------------------------------------
+    # Calculate resistance power using primary interpolator
+    # ------------------------------------------------------------------------
+    logger.info("Using primary interpolator for initial predictions")
+    raw_power = pcw_interpolator(interpolation_input)
+    
+    # Check for negative values (physically impossible for resistance/power)
+    negative_mask = raw_power < 0
+    negative_count = np.sum(negative_mask)
+    
+    if negative_count > 0:
+        logger.warning(f"Primary interpolator produced {negative_count} negative predictions "
+                       f"({100 * negative_count / len(raw_power):.2f}% of data)")
+        # Use fallback interpolator for negative values if available
+        if fallback_interpolator is not None:
+            logger.info(f"Using fallback interpolator for {negative_count} negative predictions")
+            fallback_power = fallback_interpolator(interpolation_input[negative_mask])
+            
+            # Check if fallback also produces negatives
+            fallback_negative_mask = fallback_power < 0
+            fallback_negative_count = np.sum(fallback_negative_mask)
+            
+            if fallback_negative_count > 0:
+                logger.warning( f"Fallback interpolator also produced {fallback_negative_count} "
+                                f"negative values - clipping to zero")
+                fallback_power = np.maximum(fallback_power, 0)
+            
+            # Replace negative values with fallback predictions
+            raw_power[negative_mask] = fallback_power
+            
+            logger.info(f"Successfully replaced {negative_count} values using fallback")
+        else:
+            # No fallback available - clip to zero
+            logger.warning( f"No fallback interpolator provided - clipping {negative_count} "
+                            f"negative values to zero")
+            raw_power = np.maximum(raw_power, 0)
+    else:
+        logger.info("No negative predictions - all values physically valid")
+    
+    # Store results with epsilon in column name for tracking
+    # Also store as standard column name for convenience
+    #column_name = f'{resistance_col}_{epsilon:.4f}'
+    df[resistance_col] = raw_power
+    
+    # Log statistics
+    logger.info(f"Calm water resistance calculated successfully")
+    logger.info(f"- Speed range: [{df[speed_col].min():.2f}, {df[speed_col].max():.2f}] m/s")
+    logger.info(f"- Draft range: [{df[draft_col].min():.2f}, {df[draft_col].max():.2f}] m")
+    logger.info(f"- Power range: [{df[resistance_col].min():.2f}, {df[resistance_col].max():.2f}] W")
+    
+    # Additional statistics on the corrected values
+    if negative_count > 0:
+        logger.info(f"- Values corrected: {negative_count} ({100 * negative_count / len(df):.2f}%)")
+        logger.info(f"- Corrected value range: [{raw_power[negative_mask].min():.2f}, "
+                    f"{raw_power[negative_mask].max():.2f}] W")
+    
+    # Save updated data
+    df.to_feather(high_frequency_url)
+    logger.info(f"Updated data saved to {high_frequency_url}")
+    
+    return df
+    
+# -----------------------------------------------------------------
+#           The main calm water resistance
+# -----------------------------------------------------------------
+def cw_resistance_main( hydro_db_path: Path,
+                        high_frequency_file: Path,
+                        plots_dir: Path,
+                        config_path: Path) -> None:
+    """
+    Main execution function for the calm water resistance workflow.
+    
+    Args:
+        hydro_db_path:       Path to the CFD hydrodynamic CSV database.
+        high_frequency_file: Path to the high-frequency sensor feather file.
+        plots_dir:           Directory where plots will be saved.
+        config_path:         Path to the YAML configuration file.
+    """
+    
+    # ----------------------------------------------------------------
+    # Load configuration
+    # ----------------------------------------------------------------
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+        
+    source    = config["source"]
+    speed_col = config["columns"]["speed"]
+    draft_col = config["columns"]["draft"]
+    kernel    = config["interpolator"]["kernel"]
+    epsilon   = config["interpolator"].get("epsilon")   # None if null in yaml
+    smoothing = config["interpolator"].get("smoothing", 1e-3)
+    
+    logger.info(f"Configuration loaded from {config_path}")
+    logger.info(f"  source   : {source}")
+    logger.info(f"  speed_col: {speed_col}")
+    logger.info(f"  draft_col: {draft_col}")
+    logger.info(f"  kernel   : {kernel}")
+    logger.info(f"  epsilon  : {'auto' if epsilon is None else epsilon}")
+    logger.info(f"  smoothing: {smoothing}")
+    
+    try:
+        # ----------------------------------------------------------------
+        # Step 1: Load CFD data and create interpolator
+        # ----------------------------------------------------------------
+        logger.info("=" * 70)
+        logger.info("STEP 1: Loading CFD hydrodynamic data")
+        logger.info("=" * 70)
+        
+        epsilon, pcw_interpolator = load_cfd_hydro_data(hydro_db_path,
+                                                        source=source,
+                                                        kernel=kernel,
+                                                        epsilon=epsilon,
+                                                    )
+        
+        # Write computed epsilon back to config so it can be reused next run
+        config["interpolator"]["epsilon"] = epsilon
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        logger.info(f"Computed epsilon ({epsilon:.6f}) saved back to {config_path}")
+        
+        # ----------------------------------------------------------------
+        # Step 2: Calculate calm water resistance
+        # ----------------------------------------------------------------
+        logger.info("=" * 70)
+        logger.info("STEP 2: Calculating calm water resistance")
+        logger.info("=" * 70)
+        
+        calculate_calm_water_resistance(high_frequency_file,
+                                        speed_col,
+                                        draft_col,
+                                        pcw_interpolator,
+                                        epsilon=epsilon,
+                                    )
+        logger.info("=" * 70)
+        logger.info("Calm water resistance calculation completed successfully!")
+        logger.info("=" * 70)
+        
+    except Exception as e:
+        logger.error(f"Calm water resistance calculation failed: {e}")
+        raise
