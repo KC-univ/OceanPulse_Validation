@@ -65,7 +65,7 @@ def determine_epsilon(speed_filtered: np.ndarray, draft_filtered: np.ndarray):
     # epsilon = np.sqrt(speed_spacing * draft_spacing)
 
     # Or use a fraction of the data range (this is the preferred method)
-    epsilon = 0.1 * np.sqrt(speed_range * draft_range)
+    epsilon = float(0.1 * np.sqrt(speed_range * draft_range))
     logger.info(f"Using epsilon={epsilon:.4f} for multiquadric kernel")
     
     return epsilon

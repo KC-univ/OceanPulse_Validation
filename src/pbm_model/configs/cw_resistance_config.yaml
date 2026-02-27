@@ -1,28 +1,8 @@
-# ============================================================
-# Calm Water Resistance - Configuration File
-# ============================================================
-
-# --- Data Source ---
-source: "CFD_WITH_ROUGHNESS"   # Must be one of AVAILABLE_SOURCES
-
-# --- Column Names (High-Frequency Sensor Data) ---
+source: CFD_WITH_ROUGHNESS
 columns:
-  speed: "SPEED_THROUGH_WATER_LONG"   # Ship speed column (m/s)
-  draft: "DRAFT_MEAN"                  # Ship draft column (m)
-
-# --- RBF Interpolator Settings ---
+  speed: SPEED_THROUGH_WATER_LONG
+  draft: DRAFT_MEAN
 interpolator:
-  # Kernel options:
-  #   'thin_plate_spline' - recommended for smooth data
-  #   'cubic'             - C2 continuous, good for extrapolation
-  #   'multiquadric'      - good for non-negative extrapolation
-  #   'linear', 'gaussian', 'inverse_multiquadric'
-  kernel: "multiquadric"
-
-  # Epsilon: scaling parameter for the RBF kernel.
-  # Set to null to auto-compute from data via determine_epsilon().
-  # Once computed, paste the logged value here to lock it in across runs.
-  epsilon: null   # e.g. 1.4832
-
-  # Smoothing: regularization term to avoid ill-conditioned systems.
+  kernel: multiquadric
+  epsilon: 0.3726768036784689
   smoothing: 0.001

@@ -123,8 +123,8 @@ def load_cfd_hydro_data(hydro_db_path: Path,
         
         # ------------------------------ Adding epsilon parameter --------------------------
         epsilon = epsilon if epsilon is not None else determine_epsilon(speed, draft)
-        # Guaranteed to be float here since determine_epsilon always returns float
-        assert isinstance(epsilon, float), "epsilon must be a float at this point"
+        # Ensure epsilon is a plain Python float (not numpy.float64) so YAML serializes it cleanly
+        epsilon = float(epsilon)
         
         if len(speed_filtered) == 0 or len(draft_filtered) == 0:
             raise ValueError("No valid non zero speed or draft values found")
@@ -339,7 +339,8 @@ def cw_resistance_main( hydro_db_path: Path,
                                                     )
         
         # Write computed epsilon back to config so it can be reused next run
-        config["interpolator"]["epsilon"] = epsilon
+        # Cast to plain float so PyYAML writes it as a clean scalar, not a numpy object
+        config["interpolator"]["epsilon"] = float(epsilon)
         with open(config_path, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
         logger.info(f"Computed epsilon ({epsilon:.6f}) saved back to {config_path}")
