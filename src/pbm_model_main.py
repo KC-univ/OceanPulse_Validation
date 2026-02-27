@@ -72,7 +72,7 @@ class PathConfig:
                 hydro_db_path: Path,
                 high_freq_file: Path,
                 propeller_db_path: Path,
-                cw_resistance_config: Path
+                configs_dir: Path
             ):
         # Base directories
         self.ROOT_DIR = root_dir
@@ -85,7 +85,8 @@ class PathConfig:
         self.PROPELLER_DB_PATH = propeller_db_path
         
         # config file
-        self.cw_resistance_config = cw_resistance_config
+        self.cw_resistance_config = configs_dir / "cw_resistance_config.yaml"
+        self.wind_resistance_config = configs_dir / "wind_resistance_config.yaml"
         
         # Output directories
         self.PLOTS_FOLDER = self.OUTPUT_DIR / "plots" / "physics_based_model"
@@ -105,6 +106,7 @@ class PathConfig:
                         self.PROPELLER_DB_PATH,
                         self.HIGH_FREQ_FILE,
                         self.cw_resistance_config,
+                        self.wind_resistance_config,
                     ]
         
         missing_files = [f for f in required_files if not f.exists()]
@@ -144,6 +146,10 @@ def run_resistance_modules(config: PathConfig) -> None:
     # Calm water resistance
     logger.info("Computing calm water resistance...")
     cw_resistance_main(config.HYDRO_DB_PATH, config.HIGH_FREQ_FILE, config.PLOTS_FOLDER, config.cw_resistance_config)
+    
+    # Wind resistance
+    logger.info("Computing wind resistance...")
+    wind_resistance_main(config.CFD_CX_FILE, config.HIGH_FREQ_FILE, config.wind_resistance_config)
     
 # ============================================================
 #              MAIN PIPELINE EXECUTION
@@ -198,7 +204,7 @@ def run_complete_pipeline(ROOT_DIR: Path, high_freq_file: Path, skip_phases: Opt
                         hydro_db_path=ROOT_DIR / "data" / "CFD" / "HYDRO" / "HYDRO_DB.csv",
                         propeller_db_path=ROOT_DIR / "data" / "CFD" / "HYDRO" / "PROPELLER.csv",
                         high_freq_file=high_freq_file,
-                        cw_resistance_config=ROOT_DIR / "src" / "pbm_model" / "configs" / "cw_resistance_config.yaml"
+                        configs_dir=ROOT_DIR / "src" / "pbm_model" / "configs" 
                         )
     
     # --------------------------------------------------
@@ -238,7 +244,7 @@ def run_complete_pipeline(ROOT_DIR: Path, high_freq_file: Path, skip_phases: Opt
 #              COMMAND LINE INTERFACE
 # ============================================================
 def pbm_main(ROOT_DIR: Path, high_freq_file: Path, OUTPUT_DIR: Optional[Path] = None,
-             skip_phases: Optional[list] = None) -> None:
+            skip_phases: Optional[list] = None) -> None:
     """
     Programmatic entry point for the physics-based model pipeline.
 
